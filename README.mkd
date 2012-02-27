@@ -28,7 +28,7 @@ app.route('/proxypass', function (req, resp) {
   req.pipe(request("http://otherserver.com"+req.url)).pipe(resp)
 })
 
-app.route('/hello.json').json({msg:'Nice try, piss off now.'})
+app.route('/hello.json').json({msg:'hello!'})
 
 app.route('/')
   .html(function (req, resp) {
