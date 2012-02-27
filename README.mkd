@@ -18,6 +18,7 @@ Or from source:
 
 ```javascript
 var tako = require('tako')
+  , request = require('request')
   , path = require('path')
   , app = tako()
   ;
