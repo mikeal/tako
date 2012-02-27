@@ -1,0 +1,44 @@
+# tako -- Functional web framework.
+
+## Install
+
+<pre>
+  npm install tako
+</pre>
+
+Or from source:
+
+<pre>
+  git clone git://github.com/mikeal/tako.git 
+  cd tako
+  npm link
+</pre>
+
+## Usage
+
+```javascript
+var tako = require('tako')
+  , path = require('path')
+  , app = tako()
+  ;
+
+app.route('/static').files(path.join(__dirname, 'static'))
+
+app.route('/proxypass', function (req, resp) {
+  req.pipe(request("http://otherserver.com"+req.url)).pipe(resp)
+})
+
+app.route('/')
+  .html(function (req, resp) {
+    request('http://me.iriscouch.com/db', {json:true}, function (e, r) {
+      if (e) return resp.error(e)
+      if (r.statusCode !== 200) return resp.error(r)
+      resp.end('<html><head>cool</head><body>'+r.body.index+'</body></html>')
+    })
+  })
+  .json({msg:'Nice try, piss off now.'})
+  .methods('GET')
+  ;
+  
+
+```
