@@ -15,4 +15,7 @@
     "filed":">= 0.0.6",
     "routes":"*"
   }
+, "devDependencies":
+  { "request": "2.9.x"
+  }
 }
