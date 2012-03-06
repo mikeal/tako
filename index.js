@@ -144,6 +144,12 @@ Page.prototype.promise = function (name, cb) {
   if (cb) self.on(name, cb)
   return self.promises[name]
 }
+Page.prototype.event = function (name, cb) {
+  var p = this.promise(name, cb)
+    , r = function (r) { p(null, r) }
+    ;
+  return r
+}
 Page.prototype.pipe = function (dest) {
   this.dests.push(dest)
 }
