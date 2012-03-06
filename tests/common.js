@@ -13,6 +13,10 @@ exports.all = function (functions, cb) {
   })
 }
 
+exports.assertJSON = function (res) {
+  assert.equal(res.headers['content-type'], 'application/json')
+}
+
 exports.assertStatus = function (res, status) {
   assert.equal(res.statusCode, status)
 }
