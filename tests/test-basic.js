@@ -78,8 +78,8 @@ t.httpServer.listen(8000, function () {
   request({url:url}, function (e, resp, body) {
     if (e) throw e
     if (resp.statusCode !== 200) throw new Error('status code is not 200. '+resp.statusCode)
-    assert.equal(resp.headers['content-type'], 'text/plain')
-    assert.equal(body, 'hello')
+    assert.equal(resp.headers['content-type'], 'application/json')
+    assert.equal(body, JSON.stringify({"text":"hello world"}))
     console.log('Passed no headers /')
     end()
   })
@@ -97,8 +97,8 @@ t.httpServer.listen(8000, function () {
   counter++
   request({url:url+'static'}, function (e, resp, body) {
     if (e) throw e
-    if (resp.statusCode !== 406) throw new Error('status code is not 406. '+resp.statusCode)
-    assert.equal(resp.headers['content-type'], 'text/plain')
+    if (resp.statusCode !== 200) throw new Error('status code is not 200. '+resp.statusCode)
+    assert.equal(resp.headers['content-type'], 'application/json')
     console.log('Passed 406 /static')
     end()
   })

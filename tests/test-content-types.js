@@ -42,7 +42,7 @@ app.httpServer.listen(common.PORT, function () {
           request(URL + '/json', cb)
         }
       , function (err, res, body) {
-          common.assertStatus(res, 406)
+          common.assertStatus(res, 200)
         }
       ]
     , [ function (cb) {

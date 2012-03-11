@@ -268,7 +268,7 @@ function Application (options) {
     }
     
     req.accept = function () {
-      if (!req.headers.accept) return null
+      if (!req.headers.accept) return '*/*'
       var cc = null
       var pos = 99999999
       for (var i=arguments.length-1;i!==-1;i--) {
@@ -646,6 +646,16 @@ Route.prototype.html = function (cb) {
   this.byContentType['text/html'] = cb
   return this
 }
+Route.prototype.text = function (cb) {
+  if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'text/plain')
+  else if (typeof cb === 'string') {
+    if (cb[0] === '/') cb = filed(cb)
+    else cb = new BufferResponse(cb, 'text/plain')
+  }
+  this.byContentType['text/plain'] = cb
+  return this
+}
+
 Route.prototype.file = function (filepath) {
   this.on('request', function (req, resp) {
     var f = filed(filepath)
@@ -686,3 +696,36 @@ ServiceError.prototype = new Error()
 ServiceError.prototype.constructor = ServiceError
 ServiceError.prototype.name = 'ServiceError'
 module.exports.ServiceError = ServiceError
+
+function Router (hosts) {
+  var self = this
+  self.hosts = hosts || {}
+  var handler = function (req, resp) {
+    var host = req.headers.host
+    if (!host || !self.hosts[host]) {
+      if (!self._default) {
+        resp.writeHead(404, {'content-type':'text/plain'})
+        resp.end('No host header.')
+      } else {
+        self._default.httpServer.emit('request', req, resp)
+      }
+      return
+    }
+    self.hosts[host].httpServer.emit('request', req, resp)
+  }
+  self.httpServer = http.createServer(handler)
+  self.httpsServer = https.createServer(handler)
+}
+Router.prototype.host = function (host, app) {
+  this.hosts[host] = app
+}
+Router.prototype.default = function (app) {
+  this._default = app
+}
+Router.prototype.close = function (cb) {
+  // call close on all my servers
+  // iterate through apps and call close
+}
+
+module.exports.router = function (hosts) {return new Router(hosts)}
+
