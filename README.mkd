@@ -73,4 +73,7 @@ default.route('/name').text('default')
 router.host('app1.localhost', app1)
 router.host('app2.localhost', app2)
 router.default(default)
+
+router.httpServer.listen(80)
+router.httpsServer.listen(443)
 ```
