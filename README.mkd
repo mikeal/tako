@@ -31,6 +31,8 @@ app.route('/proxypass', function (req, resp) {
 
 app.route('/hello.json').json({msg:'hello!'})
 
+app.route('/plaintext').text('I like text/plain')
+
 app.route('/')
   .html(function (req, resp) {
     request('http://me.iriscouch.com/db', {json:true}, function (e, r) {
@@ -52,4 +54,23 @@ app.sockets.on('connection', function (socket) {
   
 app.httpServer.listen(80)
 app.httpsServer.listen(443)
+```
+
+### Routing multiple domains
+
+```javascript
+var tako = require('../index')
+  , app1 = tako()
+  , app2 = tako()
+  , default = tako()
+  , router = tako.router()
+  ;
+  
+app1.route('/name').text('app1')
+app2.route('/name').text('app2')
+default.route('/name').text('default')
+
+router.host('app1.localhost', app1)
+router.host('app2.localhost', app2)
+router.default(default)
 ```
