@@ -259,7 +259,7 @@ function Application (options) {
   self.onRequest = function (req, resp) {
     if (self.logger.info) self.logger.info('Request', req.url, req.headers)
     // Opt out entirely if this is a socketio request
-    if (req.url.slice(0, '/socket.io/'.length) === '/socket.io/') {
+    if (self.socketio && req.url.slice(0, '/socket.io/'.length) === '/socket.io/') {
       return self._ioEmitter.emit('request', req, resp)
     }
     
@@ -360,37 +360,40 @@ function Application (options) {
   // setup servers
   self.http = options.http || {}
   self.https = options.https || {}
-  self.socketio = options.socketio || {}
+  self.socketio = options.socketio === undefined ? {} : false 
   if (!self.socketio.logger && self.logger) {
     self.socketio.logger = self.logger
   }
-  
-  self._ioEmitter = new events.EventEmitter()
   
   self.httpServer = http.createServer()
   self.httpsServer = https.createServer(self.https)
   
   self.httpServer.on('request', self.onRequest)
   self.httpsServer.on('request', self.onRequest)
-  self.httpServer.on('upgrade', function (request, socket, head) {
-    self._ioEmitter.emit('upgrade', request, socket, head)
-  })
-  self.httpsServer.on('upgrade', function (request, socket, head) {
-    self._ioEmitter.emit('upgrade', request, socket, head)
-  })
   
   var _listenProxied = false
   var listenProxy = function () {
-    if (!_listenProxied) self._ioEmitter.emit('listening')
+    if (!_listenProxied && self._ioEmitter) self._ioEmitter.emit('listening')
     _listenProxied = true
   }
   
   self.httpServer.on('listening', listenProxy)
   self.httpsServer.on('listening', listenProxy)
   
-  // setup socket.io
-  self.socketioManager = new io.Manager(self._ioEmitter, self.socketio)
-  self.sockets = self.socketioManager.sockets
+  if (self.socketio) {
+    // setup socket.io
+    self._ioEmitter = new events.EventEmitter()
+    
+    self.httpServer.on('upgrade', function (request, socket, head) {
+      self._ioEmitter.emit('upgrade', request, socket, head)
+    })
+    self.httpsServer.on('upgrade', function (request, socket, head) {
+      self._ioEmitter.emit('upgrade', request, socket, head)
+    })
+    
+    self.socketioManager = new io.Manager(self._ioEmitter, self.socketio)
+    self.sockets = self.socketioManager.sockets
+  }
   
   if (!self.logger) {
     self.logger = 
@@ -432,9 +435,30 @@ Application.prototype.listen = function (createServer, port, cb) {
   self.server.listen(port, cb)
   return this
 }
-Application.prototype.close = function () {
-  this.server.close()
-  return this
+Application.prototype.close = function (cb) {
+  var counter = 1
+    , self = this
+    ;
+  function end () {
+    counter = counter - 1
+    self.emit('close')
+    if (self.socketio) {
+      self._ioEmitter.emit('close')
+    }
+    if (counter === 0 && cb) cb()
+  }
+  if (self.httpServer._handle) {
+    counter++
+    self.httpServer.once('close', end)
+    self.httpServer.close()
+  }
+  if (self.httpsServer._handle) {
+    counter++
+    self.httpsServer.once('close', end)
+    self.httpsServer.close()
+  }
+  end()
+  return self
 }
 Application.prototype.notfound = function (req, resp) {
   var cc = req.accept('text/html', 'application/json', 'text/plain', '*/*') || 'text/plain'

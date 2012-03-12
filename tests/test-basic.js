@@ -50,7 +50,7 @@ counter = 0
 
 function end () {
   counter--
-  if (counter === 0) process.exit()
+  if (counter === 0) t.close()
 }
 
 t.httpServer.listen(8000, function () {

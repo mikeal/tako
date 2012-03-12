@@ -43,5 +43,5 @@ app.httpServer.listen(common.PORT, function () {
         }
       ]
     ]
-  , process.exit)
+  , function () {app.close()})
 })
