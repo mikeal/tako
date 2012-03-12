@@ -360,7 +360,7 @@ function Application (options) {
   // setup servers
   self.http = options.http || {}
   self.https = options.https || {}
-  self.socketio = options.socketio === undefined ? {} : false 
+  self.socketio = options.socketio === undefined ? {} : options.socketio
   if (!self.socketio.logger && self.logger) {
     self.socketio.logger = self.logger
   }
