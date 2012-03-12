@@ -22,7 +22,7 @@ function end () {
   counter = counter - 1
   if (counter === 0) {
     console.log('all tests passed')
-    process.exit()
+    router.close()
   }
 }
 

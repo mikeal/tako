@@ -747,8 +747,32 @@ Router.prototype.default = function (app) {
   this._default = app
 }
 Router.prototype.close = function (cb) {
-  // call close on all my servers
-  // iterate through apps and call close
+  var counter = 1
+    , self = this
+    ;
+  function end () {
+    counter = counter - 1
+    if (counter === 0 && cb) cb()
+  }
+  if (self.httpServer._handle) {
+    counter++
+    self.httpServer.once('close', end)
+    self.httpServer.close()
+  }
+  if (self.httpsServer._handle) {
+    counter++
+    self.httpsServer.once('close', end)
+    self.httpsServer.close()
+  }
+  
+  for (i in self.hosts) {
+    counter++
+    process.nextTick(function () {
+      self.hosts[i].close(end)
+    })
+    
+  }
+  end()
 }
 
 module.exports.router = function (hosts) {return new Router(hosts)}
