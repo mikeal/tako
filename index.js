@@ -721,24 +721,36 @@ ServiceError.prototype.constructor = ServiceError
 ServiceError.prototype.name = 'ServiceError'
 module.exports.ServiceError = ServiceError
 
-function Router (hosts) {
+function Router (hosts, options) {
   var self = this
   self.hosts = hosts || {}
-  var handler = function (req, resp) {
-    var host = req.headers.host
-    if (!host || !self.hosts[host]) {
-      if (!self._default) {
-        resp.writeHead(404, {'content-type':'text/plain'})
-        resp.end('No host header.')
-      } else {
-        self._default.httpServer.emit('request', req, resp)
+  self.options = options || {}
+  
+  function makeHandler (type) {
+    var handler = function (req, resp) {
+      var host = req.headers.host
+      if (!host || !self.hosts[host]) {
+        if (!self._default) {
+          resp.writeHead(404, {'content-type':'text/plain'})
+          resp.end('No host header.')
+        } else {
+          self._default.httpServer.emit(type, req, resp)
+        }
+        return
       }
-      return
+      self.hosts[host].httpServer.emit(type, req, resp)
     }
-    self.hosts[host].httpServer.emit('request', req, resp)
+    return handler
   }
-  self.httpServer = http.createServer(handler)
-  self.httpsServer = https.createServer(handler)
+  
+  self.httpServer = http.createServer()
+  self.httpsServer = https.createServer(self.options.ssl || {})
+  
+  self.httpServer.on('request', makeHandler('request'))
+  self.httpsServer.on('request', makeHandler('request'))
+  
+  self.httpServer.on('upgrade', makeHandler('upgrade'))
+  self.httpsServer.on('upgrade', makeHandler('upgrade'))
 }
 Router.prototype.host = function (host, app) {
   this.hosts[host] = app
