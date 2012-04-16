@@ -691,7 +691,12 @@ Route.prototype.file = function (filepath) {
 Route.prototype.files = function (filepath) {
   this.on('request', function (req, resp) {
     req.route.splats.unshift(filepath)
-    var f = filed(path.join.apply(path.join, req.route.splats))
+    var p = path.join.apply(path.join, req.route.splats)
+    if (p.slice(0, filepath.length) !== filepath) {
+      resp.statusCode = 403
+      return resp.end('Naughty Naughty!')
+    }
+    var f = filed(p)
     req.pipe(f)
     f.pipe(resp)
   })
