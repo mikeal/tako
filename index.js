@@ -64,6 +64,7 @@ function BufferResponse (buffer, mimetype) {
   this.mimetype = mimetype
 }
 BufferResponse.prototype.request = function (req, resp) {
+  if (resp._header) return // This response already started
   resp.setHeader('content-type', this.mimetype)
   resp.setHeader('last-modified',  this.timestamp)
   resp.setHeader('etag', this.etag)
@@ -461,6 +462,7 @@ Application.prototype.close = function (cb) {
   return self
 }
 Application.prototype.notfound = function (req, resp) {
+  if (resp._header) return // This response already started
   var cc = req.accept('text/html', 'application/json', 'text/plain', '*/*') || 'text/plain'
   if (cc === '*/*') cc = 'text/plain'
   resp.statusCode = 404
@@ -512,6 +514,7 @@ Application.prototype.page = function () {
 function JSONMiddleware () {
   this.on('request', function (req, resp) {
     resp.onWrite = function (chunk) {
+      if (resp._header) return chunk // This response already started
       // bail fast for chunks to limit impact on streaming
       if (Buffer.isBuffer(chunk)) return chunk
       // if it's an object serialize it and set proper headers
@@ -554,6 +557,7 @@ function Route (path, application) {
       if (authHandler) {
         cap(req)
         authHandler(req, resp, function (user) {
+          if (resp._header) return // This response already started
           req.user = user
           if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
             resp.statusCode = 403
@@ -565,6 +569,7 @@ function Route (path, application) {
           req.release()
         })
       } else {
+        if (resp._header) return // This response already started
         if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
           resp.statusCode = 403
           resp.setHeader('content-type', 'application/json')
@@ -574,6 +579,7 @@ function Route (path, application) {
         self.emit('request', req, resp)
       }
     } else {
+      if (resp._header) return // This response already started
       resp.statusCode = 406
       resp.setHeader('content-type', 'text/plain')
       resp.end('Request does not include a valid mime-type for this resource: '+keys.join(', '))
@@ -607,6 +613,7 @@ function Route (path, application) {
         var h = this.byContentType[cc]
       }
       if (!h) return returnEarly(req, resp, keys, authHandler)
+      if (resp._header) return // This response already started
       resp.setHeader('content-type', cc)
 
       var run = function () {
@@ -626,6 +633,7 @@ function Route (path, application) {
         authHandler(req, resp, function (user) {
           req.user = user
           if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
+            if (resp._header) return // This response already started
             resp.statusCode = 403
             resp.setHeader('content-type', 'application/json')
             resp.end(JSON.stringify({error: 'This resource requires auth.'}))
@@ -635,6 +643,7 @@ function Route (path, application) {
           req.release()
         })
       } else {
+        if (resp._header) return // This response already started
         if (self._must && self._must.indexOf('auth') !== -1) {
           resp.statusCode = 403
           resp.setHeader('content-type', 'application/json')
