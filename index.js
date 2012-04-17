@@ -11,12 +11,18 @@ var util = require('util')
   , https = require('https')
   // Dependencies
   , routes = require('routes')
-  , io = require('socket.io')
   , filed = require('filed')
   // Local Imports
   , handlebars = require('./handlebars')
   , rfc822 = require('./rfc822')
+  , io = null
   ;
+
+try {
+  io = require('socket.io')
+} catch (er) {
+  // oh well, no socket.io.
+}
 
 var cap = function (stream, limit) {
   if (!limit) limit = Infinity
@@ -360,9 +366,13 @@ function Application (options) {
   // setup servers
   self.http = options.http || {}
   self.https = options.https || {}
-  self.socketio = options.socketio === undefined ? {} : options.socketio
-  if (!self.socketio.logger && self.logger) {
-    self.socketio.logger = self.logger
+  if (io) {
+    self.socketio = options.socketio === undefined ? {} : options.socketio
+    if (!self.socketio.logger && self.logger) {
+      self.socketio.logger = self.logger
+    }
+  } else if (options.socketio) {
+    throw new Error('socket.io is not available');
   }
   
   self.httpServer = http.createServer()
@@ -380,7 +390,7 @@ function Application (options) {
   self.httpServer.on('listening', listenProxy)
   self.httpsServer.on('listening', listenProxy)
   
-  if (self.socketio) {
+  if (io && self.socketio) {
     // setup socket.io
     self._ioEmitter = new events.EventEmitter()
     
@@ -442,7 +452,7 @@ Application.prototype.close = function (cb) {
   function end () {
     counter = counter - 1
     self.emit('close')
-    if (self.socketio) {
+    if (io && self.socketio) {
       self._ioEmitter.emit('close')
     }
     if (counter === 0 && cb) cb()
