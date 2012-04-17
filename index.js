@@ -371,6 +371,8 @@ function Application (options) {
     if (!self.socketio.logger && self.logger) {
       self.socketio.logger = self.logger
     }
+  } else if (options.socketio) {
+    throw new Error('socket.io is not available');
   }
   
   self.httpServer = http.createServer()
