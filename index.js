@@ -62,23 +62,29 @@ function BufferResponse (buffer, mimetype) {
   this.timestamp = rfc822.getRFC822Date(new Date())
   this.etag = crypto.createHash('md5').update(buffer).digest("hex")
   this.mimetype = mimetype
+  this.cache = true
 }
 BufferResponse.prototype.request = function (req, resp) {
   if (resp._header) return // This response already started
   resp.setHeader('content-type', this.mimetype)
-  resp.setHeader('last-modified',  this.timestamp)
-  resp.setHeader('etag', this.etag)
+  if (this.cache) {
+    resp.setHeader('last-modified',  this.timestamp)
+    resp.setHeader('etag', this.etag)
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     resp.statusCode = 405
-    return resp.end()
+    return (resp._end ? resp._end : resp.end).call(resp)
   }
-  if (req.headers['if-none-match'] === this.etag ||
-      req.headers['if-modified-since'] === this.timestamp) {
+  if (this.cache && 
+      req.headers['if-none-match'] === this.etag ||
+      req.headers['if-modified-since'] === this.timestamp
+      ) {
     resp.statusCode = 304
-    return resp.end()
+    return (resp._end ? resp._end : resp.end).call(resp)
   }
-  resp.statusCode = 200
-  return resp.end(this.body)
+  resp.statusCode = this.statusCode || 200
+  ;(resp._write ? resp._write : resp.write).call(resp, this.body)
+  return (resp._end ? resp._end : resp.end).call(resp)
 }
 
 function Page (templatename) {
@@ -286,6 +292,11 @@ function Application (options) {
       self.logger.log('error %statusCode "%message "', err)
       resp.end(err.message || err) // this should be better
     }
+    
+    resp.notfound = function (log) {
+      if (log) self.logger.log(log)
+      self.notfound(req, resp)
+    }
 
     // Get all the parsed url properties on the request
     // This is the same style express uses and it's quite nice
@@ -305,6 +316,9 @@ function Application (options) {
     var onWrites = []
     resp._write = resp.write
     resp.write = function () {
+      if (resp.statusCode === 404 && self._notfound) {
+        return self._notfound.request(req, resp)
+      }
       if (onWrites.length === 0) return resp._write.apply(resp, arguments)
       var args = arguments
       onWrites.forEach(function (onWrite) {
@@ -317,6 +331,9 @@ function Application (options) {
     // Fix for node's premature header check in end()
     resp._end = resp.end
     resp.end = function (chunk) {
+      if (resp.statusCode === 404 && self._notfound) {
+        return self._notfound.request(req, resp)
+      }
       if (chunk) resp.write(chunk)
       resp._end()
       self.logger.info('Response', resp.statusCode, req.url, resp._headers)
@@ -462,7 +479,21 @@ Application.prototype.close = function (cb) {
   return self
 }
 Application.prototype.notfound = function (req, resp) {
+  if (!resp) {
+    if (typeof req === "string") {
+      if (req[0] === '/') req = new BufferResponse(fs.readFileSync(req), 'text/html')
+      else req = new BufferResponse(req, 'text/html')
+    }
+    req.statusCode = 404
+    req.cache = false
+    this._notfound = req
+    return
+  }
+  
   if (resp._header) return // This response already started
+  
+  if (this._notfound) return this._notfound.request(req, resp)
+  
   var cc = req.accept('text/html', 'application/json', 'text/plain', '*/*') || 'text/plain'
   if (cc === '*/*') cc = 'text/plain'
   resp.statusCode = 404
