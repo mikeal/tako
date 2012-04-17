@@ -493,6 +493,16 @@ Application.prototype.notfound = function (req, resp) {
     if (typeof req === "string") {
       if (req[0] === '/') req = new BufferResponse(fs.readFileSync(req), 'text/html')
       else req = new BufferResponse(req, 'text/html')
+    } else if (typeof req === "function") {
+      this._notfound = {}
+      this._notfound.request = function (r, resp) {
+        if (resp._write) resp.write = resp._write
+        if (resp._end) resp.end = resp._end
+        req(r, resp)
+      }
+      return
+    } else if (typeof req === 'object') {
+      req = new BufferResponse(JSON.stringify(req), 'application/json')
     }
     req.statusCode = 404
     req.cache = false
