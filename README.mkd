@@ -94,6 +94,4 @@ templates.get('template.html', function(err, t){
   if(err) throw new Error(err)
   var html = t.render({data: 'hello world'})
 })
-
-
 ```
