@@ -355,6 +355,9 @@ function Application (options) {
       }
     })
 
+
+    req.route.fn.call(req.route, req, resp, self.authHandler)
+
     if (req.listeners('body').length) {
       var buffer = ''
       req.on('data', function (chunk) {
@@ -365,8 +368,6 @@ function Application (options) {
         req.emit('body', buffer)
       })
     }
-
-    req.route.fn.call(req.route, req, resp, self.authHandler)
   }
 
   self.router = new routes.Router()
