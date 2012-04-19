@@ -14,7 +14,6 @@
   { "filed":">= 0.0.6",
     "routes":"*"
   }
-, "optionalDependencies": { "socket.io":"*" }
 , "devDependencies": { "request": "2.9.x" }
 , "scripts": { "test": "node tests/run.js" }
 }
