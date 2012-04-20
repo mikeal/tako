@@ -60,7 +60,6 @@ var cap = function (stream, limit) {
 module.exports = function (options) {
   return new Application(options)
 }
-exports.globalMiddles = {}
 
 function BufferResponse (buffer, mimetype) {
   if (!Buffer.isBuffer(buffer)) this.body = new Buffer(buffer)
@@ -263,7 +262,6 @@ function Application (options) {
   var self = this
   if (!options) options = {}
   self.options = options
-  self.middles = []
   self.addHeaders = {}
   if (self.options.logger) {
     self.logger = self.options.logger
@@ -347,14 +345,6 @@ function Application (options) {
 
     self.emit('request', req, resp)
 
-    self.middles.forEach(function (middle) {
-      middle.emit('request', req, resp)
-      if (resp.onWrite) {
-        onWrites.push(resp.onWrite)
-        resp.onWrite = null
-      }
-    })
-
 
     req.route.fn.call(req.route, req, resp, self.authHandler)
 
@@ -380,7 +370,7 @@ function Application (options) {
   self.templates = new Templates(self)
   
   // Default to having json enabled
-  self.middle('json')
+  self.on('request', JSONRequestHandler)
   
   // setup servers
   self.http = options.http || {}
@@ -444,12 +434,7 @@ Application.prototype.route = function (path, cb) {
   return r
 }
 Application.prototype.middle = function (mid) {
-  if (typeof mid === 'string') {
-    if (!exports.globalMiddles[mid]) throw new Error('No known global middleware of type "'+mid+'"')
-    mid = exports.globalMiddles[mid]
-  }
-  this.middles.push(mid)
-  return this
+  throw new Error('Middleware is dumb. Just listen to the app "request" event.')
 }
 
 Application.prototype.listen = function (createServer, port, cb) {
@@ -563,36 +548,33 @@ Application.prototype.page = function () {
   return page
 }
 
-function JSONMiddleware () {
-  this.on('request', function (req, resp) {
-    resp.onWrite = function (chunk) {
-      if (resp._header) return chunk // This response already started
-      // bail fast for chunks to limit impact on streaming
-      if (Buffer.isBuffer(chunk)) return chunk
-      // if it's an object serialize it and set proper headers
-      if (typeof chunk === 'object') {
-        chunk = new Buffer(JSON.stringify(chunk))
-        resp.setHeader('content-type', 'application/json')
-        resp.setHeader('content-length', chunk.length)
-        if (!resp.statusCode && (req.method === 'GET' || req.method === 'HEAD')) {
-          resp.statusCode = 200
-        }
-        return chunk
-      }
-      return chunk
-    }
-    
-    if (req.method === "PUT" || req.method === "POST") {
-      if (req.headers['content-type'] === 'application/json') {
-        req.on('body', function (body) {
-          req.emit('json', JSON.parse(body))
-        })
+module.exports.JSONRequestHandler = JSONRequestHandler
+function JSONRequestHandler (req, resp) {
+  var orig = resp.write
+  resp.write = function (chunk) {
+    if (resp._header) return orig.call(this, chunk) // This response already started
+    // bail fast for chunks to limit impact on streaming
+    if (Buffer.isBuffer(chunk)) return orig.call(this, chunk)
+    // if it's an object serialize it and set proper headers
+    if (typeof chunk === 'object') {
+      chunk = new Buffer(JSON.stringify(chunk))
+      resp.setHeader('content-type', 'application/json')
+      resp.setHeader('content-length', chunk.length)
+      if (!resp.statusCode && (req.method === 'GET' || req.method === 'HEAD')) {
+        resp.statusCode = 200
       }
     }
-  })
+    return orig.call(resp, chunk)
+  }
+  if (req.method === "PUT" || req.method === "POST") {
+    if (req.headers['content-type'] === 'application/json') {
+      req.on('body', function (body) {
+        req.emit('json', JSON.parse(body))
+      })
+    }
+  }
 }
-util.inherits(JSONMiddleware, events.EventEmitter)
-exports.globalMiddles['json'] = new JSONMiddleware()
+
 
 function Route (path, application) {
   // This code got really crazy really fast.
