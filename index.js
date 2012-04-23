@@ -70,7 +70,7 @@ function BufferResponse (buffer, mimetype) {
   this.cache = true
 }
 BufferResponse.prototype.request = function (req, resp) {
-  if (resp._header) return // This response already started
+  if (resp._headerSent) return // This response already started
   resp.setHeader('content-type', this.mimetype)
   if (this.cache) {
     resp.setHeader('last-modified',  this.timestamp)
@@ -340,7 +340,7 @@ function Application (options) {
       }
       if (chunk) resp.write(chunk)
       resp._end()
-      self.logger.info('Response', resp.statusCode, req.url, resp._headers)
+      self.logger.info('Response', resp.statusCode, req.url, resp._headerSent)
     }
 
     self.emit('request', req, resp)
@@ -496,7 +496,7 @@ Application.prototype.notfound = function (req, resp) {
     return
   }
 
-  if (resp._header) return // This response already started
+  if (resp._headerSent) return // This response already started
 
   if (this._notfound) return this._notfound.request(req, resp)
 
@@ -534,7 +534,7 @@ Application.prototype.page = function () {
         process.nextTick(function () {
           var text = template.render(page.results)
           page.dests.forEach(function (d) {
-            if (d._header) return // Don't try to write to a response that's already finished
+            if (d._headerSent) return // Don't try to write to a response that's already finished
             if (d.writeHead) {
               d.statusCode = 200
               d.setHeader('content-type', page.mimetype || 'text/html')
@@ -555,7 +555,7 @@ module.exports.JSONRequestHandler = JSONRequestHandler
 function JSONRequestHandler (req, resp) {
   var orig = resp.write
   resp.write = function (chunk) {
-    if (resp._header) return orig.call(this, chunk) // This response already started
+    if (resp._headerSent) return orig.call(this, chunk) // This response already started
     // bail fast for chunks to limit impact on streaming
     if (Buffer.isBuffer(chunk)) return orig.call(this, chunk)
     // if it's an object serialize it and set proper headers
@@ -594,7 +594,7 @@ function Route (path, application) {
       if (authHandler) {
         cap(req)
         authHandler(req, resp, function (user) {
-          if (resp._header) return // This response already started
+          if (resp._headerSent) return // This response already started
           req.user = user
           if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
             resp.statusCode = 403
@@ -606,7 +606,7 @@ function Route (path, application) {
           req.release()
         })
       } else {
-        if (resp._header) return // This response already started
+        if (resp._headerSent) return // This response already started
         if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
           resp.statusCode = 403
           resp.setHeader('content-type', 'application/json')
@@ -616,7 +616,7 @@ function Route (path, application) {
         self.emit('request', req, resp)
       }
     } else {
-      if (resp._header) return // This response already started
+      if (resp._headerSent) return // This response already started
       resp.statusCode = 406
       resp.setHeader('content-type', 'text/plain')
       resp.end('Request does not include a valid mime-type for this resource: '+keys.join(', '))
@@ -650,7 +650,7 @@ function Route (path, application) {
         var h = this.byContentType[cc]
       }
       if (!h) return returnEarly(req, resp, keys, authHandler)
-      if (resp._header) return // This response already started
+      if (resp._headerSent) return // This response already started
       resp.setHeader('content-type', cc)
 
       var run = function () {
@@ -670,7 +670,7 @@ function Route (path, application) {
         authHandler(req, resp, function (user) {
           req.user = user
           if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
-            if (resp._header) return // This response already started
+            if (resp._headerSent) return // This response already started
             resp.statusCode = 403
             resp.setHeader('content-type', 'application/json')
             resp.end(JSON.stringify({error: 'This resource requires auth.'}))
@@ -680,7 +680,7 @@ function Route (path, application) {
           req.release()
         })
       } else {
-        if (resp._header) return // This response already started
+        if (resp._headerSent) return // This response already started
         if (self._must && self._must.indexOf('auth') !== -1) {
           resp.statusCode = 403
           resp.setHeader('content-type', 'application/json')
