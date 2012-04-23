@@ -71,7 +71,7 @@ function BufferResponse (buffer, mimetype) {
 }
 BufferResponse.prototype.request = function (req, resp) {
   if (resp._headerSent) return // This response already started
-  resp.setHeader('content-type', this.mimetype)
+  if (this.mimetype) resp.setHeader('content-type', this.mimetype)
   if (this.cache) {
     resp.setHeader('last-modified',  this.timestamp)
     resp.setHeader('etag', this.etag)
@@ -258,6 +258,40 @@ function loadfiles (f, cb) {
   })
 }
 
+// interpret cb as some sort of handler.
+//
+// route.json(function (req, res) { ... }) // you handle the json
+// route.json(404) // couldn't find your json.
+// route.json(410) // json is gone.  stop asking.
+// route.json({ok: true}) // jsonify
+// route.json('{"ok":true}') // return this exact json string
+// route.json(new Buffer('{"ok":true}')) // return this exact json
+// route.json('/path/to/foo.json') // send this file
+// If none of these match, returns null, which means 'no handler'
+function makeHandler (cb) {
+  if (typeof cb === 'function' || (cb instanceof BufferResponse)) {
+    // already a valid handler
+    return cb
+  }
+
+  if (typeof cb === 'number') {
+    return function (req, res) {
+      return res.error(cb)
+    }
+  }
+  if (Buffer.isBuffer(cb)) {
+    return new BufferResponse(cb)
+  }
+  if (typeof cb === 'object') {
+    return new BufferResponse(JSON.stringify(cb), 'application/json')
+  }
+  if (typeof cb === 'string') {
+    if (cb[0] === '/') return filed(cb)
+    return new BufferResponse(cb)
+  }
+  return null
+}
+
 function Application (options) {
   var self = this
   if (!options) options = {}
@@ -356,6 +390,11 @@ Application.prototype._onRequest = function (req, resp) {
     listeners[i].call(self, req, resp)
     if (resp._headerSent) return
   }
+  var listeners = req.route.listeners('request')
+  for (var i = 0; i < listeners.length; i ++) {
+    listeners[i].call(req.route, req, resp)
+    if (resp._headerSent) return
+  }
 
   // all the 'request' event handlers fired, and none
   // of them sent a response.  Apply plugins, and then
@@ -376,9 +415,24 @@ Application.prototype._onRequest = function (req, resp) {
     }
 
     req.release()
-    // now let the route handle it
-    req.route.handler(req, resp)
+    // now do the handler dance
+    self._applyHandler(req, resp)
   })
+}
+
+// apply the handler that is attached to the request.
+Application.prototype._applyHandler = function (req, resp) {
+  var h = req.handler || req.route.handler
+  if (!h) return this.notfound(req, resp)
+  if (h.request) {
+    return h.request(req, resp)
+  }
+  if (h.pipe) {
+    req.pipe(h)
+    h.pipe(resp)
+    return
+  }
+  h.call(req.route, req, resp)
 }
 
 Application.prototype.plugin = function (name, fn) {
@@ -417,6 +471,7 @@ Application.prototype._decorate = function (req, resp) {
     if (!req.headers.accept) return '*/*'
     var cc = null
     var pos = 99999999
+    if (Array.isArray(arguments[0])) arguments = arguments[0]
     for (var i=arguments.length-1;i!==-1;i--) {
       var ipos = req.headers.accept.indexOf(arguments[i])
       if ( ipos !== -1 && ipos < pos ) cc = arguments[i]
@@ -425,6 +480,9 @@ Application.prototype._decorate = function (req, resp) {
   }
 
   resp.error = function (err) {
+    if (typeof(err) === "number") {
+      err = {statusCode:err, message: http.STATUS_CODES[err]}
+    }
     if (typeof(err) === "string") err = {message: err}
     if (!err.statusCode) err.statusCode = 500
     resp.statusCode = err.statusCode || 500
@@ -552,7 +610,9 @@ Application.prototype.notfound = function (req, resp) {
   if (this._notfound) return this._notfound.request(req, resp)
 
   var cc = req.accept('text/html', 'application/json', 'text/plain', '*/*') || 'text/plain'
-  if (cc === '*/*') cc = 'text/plain'
+  if (cc === '*/*') {
+    cc = 'text/plain'
+  }
   resp.statusCode = 404
   resp.setHeader('content-type', cc)
   if (cc === 'text/html') {
@@ -640,151 +700,69 @@ function Route (path, application) {
   self.app = application
   self.byContentType = {}
 
-  var returnEarly = function (req, resp, keys, authHandler) {
-    if (self._events && self._events['request']) {
-      if (authHandler) {
-        cap(req)
-        authHandler(req, resp, function (user) {
-          if (resp._headerSent) return // This response already started
-          req.user = user
-          if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
-            resp.statusCode = 403
-            resp.setHeader('content-type', 'application/json')
-            resp.end(JSON.stringify({error: 'This resource requires auth.'}))
-            return
-          }
-          self.emit('request', req, resp)
-          req.release()
-        })
-      } else {
-        if (resp._headerSent) return // This response already started
-        if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
-          resp.statusCode = 403
-          resp.setHeader('content-type', 'application/json')
-          resp.end(JSON.stringify({error: 'This resource requires auth.'}))
-          return
-        }
-        self.emit('request', req, resp)
-      }
-    } else {
-      if (resp._headerSent) return // This response already started
-      resp.statusCode = 406
-      resp.setHeader('content-type', 'text/plain')
-      resp.end('Request does not include a valid mime-type for this resource: '+keys.join(', '))
-    }
+  self.handler = function (req, resp) {
+    // the default handler is just a 404
+    application.notfound(req, resp)
   }
 
-  self.handler = function (req, resp, authHandler) {
-    if (self._methods && self._methods.indexOf(req.method) === -1) {
-      resp.statusCode = 405
-      resp.end('Method not Allowed.')
-      return
-    }
-
-    self.emit('before', req, resp)
-    if (self.authHandler) {
-      authHandler = self.authHandler
-    }
-
-    var keys = Object.keys(self.byContentType).concat(['*/*'])
-    if (keys.length) {
-      if (req.method !== 'PUT' && req.method !== 'POST') {
-        var cc = req.accept.apply(req, keys)
-      } else {
-        var cc = req.headers['content-type']
-      }
-
-      if (!cc) return returnEarly(req, resp, keys, authHandler)
-      if (cc === '*/*') {
-        var h = this.byContentType[Object.keys(this.byContentType)[0]]
-      } else {
-        var h = this.byContentType[cc]
-      }
-      if (!h) return returnEarly(req, resp, keys, authHandler)
-      if (resp._headerSent) return // This response already started
-      resp.setHeader('content-type', cc)
-
-      var run = function () {
-        if (h.request) {
-          return h.request(req, resp)
-        }
-        if (h.pipe) {
-          req.pipe(h)
-          h.pipe(resp)
-          return
-        }
-        h.call(req.match, req, resp)
-      }
-
-      if (authHandler) {
-        cap(req)
-        authHandler(req, resp, function (user) {
-          req.user = user
-          if (self._must && self._must.indexOf('auth') !== -1 && !req.user) {
-            if (resp._headerSent) return // This response already started
-            resp.statusCode = 403
-            resp.setHeader('content-type', 'application/json')
-            resp.end(JSON.stringify({error: 'This resource requires auth.'}))
-            return
-          }
-          run()
-          req.release()
-        })
-      } else {
-        if (resp._headerSent) return // This response already started
-        if (self._must && self._must.indexOf('auth') !== -1) {
-          resp.statusCode = 403
-          resp.setHeader('content-type', 'application/json')
-          resp.end(JSON.stringify({error: 'This resource requires auth.'}))
-          return
-        }
-        run()
-      }
-    } else {
-      returnEarly(req, resp, keys, authHandler)
-    }
-  }
   application.emit('newroute', self)
 }
 
 util.inherits(Route, events.EventEmitter)
-Route.prototype.json = function (cb) {
-  if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'application/json')
-  else if (typeof cb === 'object') cb = new BufferResponse(JSON.stringify(cb), 'application/json')
-  else if (typeof cb === 'string') {
-    if (cb[0] === '/') cb = filed(cb)
-    else cb = new BufferResponse(cb, 'application/json')
+
+Route.prototype.default = function (cb) {
+  this.handler = makeHandler(cb)
+}
+
+
+// r.accepts('application/json', sendJson).accepts('text/html', sendHTML)
+Route.prototype.accepts = function () {
+  var accepts = new Array(arguments.length)
+  for (var i = 0; i < accepts.length; i ++) {
+    accepts[i] = arguments[i]
   }
-  this.byContentType['application/json'] = cb
-  return this
+  if (typeof accepts[accepts.length-1] !== 'string') {
+    var handler = makeHandler(accepts.pop())
+  }
+
+
+  this._accepts = this._accepts || []
+  this._accepts = this._accepts.concat(accepts)
+
+  var self = this
+  return this.on('request', function (req, res) {
+    var acc = req.accept(self._accepts.concat('*/*'))
+    if (!acc) {
+      res.error(406)
+    }
+    if (handler && !req.handler &&
+        (acc === '*/*' || accepts.indexOf(acc) !== -1)) {
+      // first hit!  assign the desired handler.
+      // because of the !req.handler check, only the first one
+      // will take control.
+      res.setHeader('content-type', acc)
+      req.handler = handler
+    }
+  })
+}
+
+
+Route.prototype.json = function (cb) {
+  return this.accepts('application/json', 'text/json', 'application/x-json', makeHandler(cb))
 }
 
 Route.prototype.html = function (cb) {
-  if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'text/html')
-  else if (typeof cb === 'string') {
-    if (cb[0] === '/') cb = filed(cb)
-    else cb = new BufferResponse(cb, 'text/html')
-  }
-  this.byContentType['text/html'] = cb
-  return this
+  return this.accepts('text/html', makeHandler(cb))
 }
 
 Route.prototype.text = function (cb) {
-  if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'text/plain')
-  else if (typeof cb === 'string') {
-    if (cb[0] === '/') cb = filed(cb)
-    else cb = new BufferResponse(cb, 'text/plain')
-  }
-  this.byContentType['text/plain'] = cb
-  return this
+  return this.accepts('text/plain', makeHandler(cb))
 }
 
 
 Route.prototype.file = function (filepath) {
   this.on('request', function (req, resp) {
-    var f = filed(filepath)
-    req.pipe(f)
-    f.pipe(resp)
+    req.handler = filed(filepath)
   })
   return this
 }
@@ -797,9 +775,7 @@ Route.prototype.files = function (filepath) {
       resp.statusCode = 403
       return resp.end('Naughty Naughty!')
     }
-    var f = filed(p)
-    req.pipe(f)
-    f.pipe(resp)
+    req.handler = filed(p)
   })
   return this
 }
