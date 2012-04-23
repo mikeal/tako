@@ -343,11 +343,11 @@ Application.prototype._onRequest = function (req, resp) {
 
   self._decorate(req, resp)
 
-  if (!req.route) return self.notfound(req, resp)
+  if (!req.match) return self.notfound(req, resp)
 
   self.emit('request', req, resp)
 
-  req.route.fn.call(req.route, req, resp, self.authHandler)
+  req.match.fn.call(req.match, req, resp, self.authHandler)
 
   if (req.listeners('body').length) {
     var buffer = ''
@@ -406,10 +406,13 @@ Application.prototype._decorate = function (req, resp) {
   // that the user has added musts and such to.  If it doesn't match
   // any routes, then the default handler should just attach a
   // 'resp.error(404)' handler to it.
-  req.route = self.router.match(req.pathname)
-  if (!req.route) return
+  req.match = self.router.match(req.pathname)
+  req.route = req.match
+  if (!req.match) return
 
-  req.params = req.route.params
+  req.params = req.match.params
+  req.splats = req.match.splats
+  req.src = req.match.route
 
   // Fix for node's premature header check in end()
   resp._end = resp.end
@@ -450,6 +453,7 @@ Application.prototype.listen = function (createServer, port, cb) {
   self.server.listen(port, cb)
   return this
 }
+
 Application.prototype.close = function (cb) {
   var counter = 1
     , self = this
@@ -475,6 +479,7 @@ Application.prototype.close = function (cb) {
   end()
   return self
 }
+
 Application.prototype.notfound = function (req, resp) {
   if (!resp) {
     if (typeof req === "string") {
@@ -663,7 +668,7 @@ function Route (path, application) {
           h.pipe(resp)
           return
         }
-        h.call(req.route, req, resp)
+        h.call(req.match, req, resp)
       }
 
       if (authHandler) {
@@ -741,8 +746,8 @@ Route.prototype.file = function (filepath) {
 
 Route.prototype.files = function (filepath) {
   this.on('request', function (req, resp) {
-    req.route.splats.unshift(filepath)
-    var p = path.join.apply(path.join, req.route.splats)
+    req.match.splats.unshift(filepath)
+    var p = path.join.apply(path.join, req.match.splats)
     if (p.slice(0, filepath.length) !== filepath) {
       resp.statusCode = 403
       return resp.end('Naughty Naughty!')
