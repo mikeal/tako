@@ -836,14 +836,21 @@ Route.prototype.files = function (filepath) {
   return this
 }
 
-Route.prototype.auth = function (handler) {
-  if (!handler) return this.authHandler
-  this.authHandler = handler
-  return this
+Route.prototype.auth = function () {
+  return this.must('auth', 401)
 }
 
-Route.prototype.must = function () {
-  this._must = Array.prototype.slice.call(arguments)
+// must have auth, or else send a 401:
+// app.plugin('auth', authHandler)
+// app.route('/x').must('auth', 401)
+Route.prototype.must = function (thing, orelse) {
+  orelse = makeHandler(orelse)
+  return this.on('request', function (req, res) {
+    var when = req.app._plugins[thing] ? 'plugin:'+thing : 'pluginsDone'
+    req.on(when, function () {
+      if (!req[thing]) req.handler = orelse
+    })
+  })
   return this
 }
 
