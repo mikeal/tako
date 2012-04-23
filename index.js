@@ -345,10 +345,19 @@ Application.prototype._onRequest = function (req, resp) {
 
   if (!req.match) return self.notfound(req, resp)
 
-  self.emit('request', req, resp)
-
-  // attach the route
+  // attach the route handler
   req.match.fn(req, resp)
+
+  // like doing self.emit('request', req, resp)
+  // except that we abort if anyone takes over and starts
+  // sending the response.
+  var listeners = self.listeners('request')
+  for (var i = 0; i < listeners.length; i ++) {
+    listeners[i].call(self, req, resp)
+    if (resp._headerSent) return
+  }
+
+  // now let the route handle it.
   req.route.handler(req, resp)
 
   if (req.listeners('body').length) {
