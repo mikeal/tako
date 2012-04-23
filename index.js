@@ -267,7 +267,7 @@ function Application (options) {
     self.logger = self.options.logger
   }
 
-
+  self._plugins = {}
 
   self.router = new routes.Router()
   self.on('newroute', function (route) {
@@ -357,19 +357,46 @@ Application.prototype._onRequest = function (req, resp) {
     if (resp._headerSent) return
   }
 
-  // now let the route handle it.
-  req.route.handler(req, resp)
+  // all the 'request' event handlers fired, and none
+  // of them sent a response.  Apply plugins, and then
+  // let the route handle it.
+  cap(req)
+  self._plug(req, resp, function () {
+    // if any of those functions (plugins or event handlers)
+    // attached a 'body' listener, then set that up.
+    if (req.listeners('body').length) {
+      var buffer = ''
+      req.on('data', function (chunk) {
+        buffer += chunk
+      })
+      req.on('end', function (chunk) {
+        if (chunk) buffer += chunk
+        req.emit('body', buffer)
+      })
+    }
 
-  if (req.listeners('body').length) {
-    var buffer = ''
-    req.on('data', function (chunk) {
-      buffer += chunk
-    })
-    req.on('end', function (chunk) {
-      if (chunk) buffer += chunk
-      req.emit('body', buffer)
-    })
-  }
+    req.release()
+    // now let the route handle it
+    req.route.handler(req, resp)
+  })
+}
+
+Application.prototype._plug = function (req, resp, cb) {
+  var plugins = Object.keys(this._plugins)
+  var len = plugins.length
+  var self = this
+  if (!len) return cb()
+
+  plugins.forEach(function (p) {
+    self._plugins[p].call(self, req, resp, next(p))
+  })
+
+  function next (p) { return function (er) {
+    if (er) req.pluginErrors[p] = er
+    else req[p] = req[p] || true
+    req.emit('plugin:' + p)
+    if (-- len === 0) req.emit('pluginsDone')
+  }}
 }
 
 Application.prototype._decorate = function (req, resp) {
