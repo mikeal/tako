@@ -722,6 +722,54 @@ Route.prototype.default = function (cb) {
   this.handler = makeHandler(cb)
 }
 
+// r.methods('POST', 'PUT', uploadHandler).methods('GET', showIt)
+Route.prototype.methods = function () {
+  var methods = new Array(arguments.length)
+  for (var i = 0; i < methods.length; i ++) {
+    methods[i] = arguments[i]
+  }
+  if (typeof methods[methods.length-1] !== 'string') {
+    var handler = makeHandler(methods.pop())
+  }
+
+  this._methods = this._methods || []
+  this._methods = this._methods.concat(methods)
+
+  var self = this
+  return this.on('request', function (req, res) {
+    var method = req.method
+
+    // HEAD is just a bodiless GET
+    if (method === 'HEAD') method = 'GET'
+
+    if (self._methods.indexOf(req.method) === -1) {
+      res.error(405)
+    }
+    if (handler && !req.handler && methods.indexOf(req.method) !== -1) {
+      // first hit!  assign the desired handler.
+      // because of the !req.handler check, only the first one
+      // will take control.
+      req.handler = handler
+    }
+  })
+}
+
+Route.prototype.del = function (cb) {
+  return this.methods('DELETE', makeHandler(cb))
+}
+
+Route.prototype.get = function (cb) {
+  return this.methods('GET', makeHandler(cb))
+}
+
+Route.prototype.put = function (cb) {
+  return this.methods('PUT', makeHandler(cb))
+}
+
+Route.prototype.post = function (cb) {
+  return this.methods('POST', makeHandler(cb))
+}
+
 
 // r.accepts('application/json', sendJson).accepts('text/html', sendHTML)
 Route.prototype.accepts = function () {
@@ -796,11 +844,6 @@ Route.prototype.auth = function (handler) {
 
 Route.prototype.must = function () {
   this._must = Array.prototype.slice.call(arguments)
-  return this
-}
-
-Route.prototype.methods = function () {
-  this._methods = Array.prototype.slice.call(arguments)
   return this
 }
 
