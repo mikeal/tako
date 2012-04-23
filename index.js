@@ -271,8 +271,8 @@ function Application (options) {
 
   self.router = new routes.Router()
   self.on('newroute', function (route) {
-    self.router.addRoute(route.path, function (req, resp, authHandler) {
-      route.handler(req, resp, authHandler)
+    self.router.addRoute(route.path, function (req, resp) {
+      req.route = route
     })
   })
 
@@ -347,7 +347,9 @@ Application.prototype._onRequest = function (req, resp) {
 
   self.emit('request', req, resp)
 
-  req.match.fn.call(req.match, req, resp, self.authHandler)
+  // attach the route
+  req.match.fn(req, resp)
+  req.route.handler(req, resp)
 
   if (req.listeners('body').length) {
     var buffer = ''
