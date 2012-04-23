@@ -771,12 +771,10 @@ Route.prototype.methods = function () {
 
 
 function ServiceError(msg) {
-  Error.apply(this, arguments)
-  this.message = msg 
-  this.stack = (new Error()).stack;
+  this.message = msg
+  Error.captureStackTrace(this, ServiceError);
 }
-ServiceError.prototype = new Error()
-ServiceError.prototype.constructor = ServiceError
+util.inherits(ServiceError, Error)
 ServiceError.prototype.name = 'ServiceError'
 module.exports.ServiceError = ServiceError
 
