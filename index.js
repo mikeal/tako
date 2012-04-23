@@ -381,6 +381,13 @@ Application.prototype._onRequest = function (req, resp) {
   })
 }
 
+Application.prototype.plugin = function (name, fn) {
+  if (this._plugins[name]) {
+    throw new Error('Plugin '+name+' already added')
+  }
+  this._plugins[name] = fn
+}
+
 Application.prototype._plug = function (req, resp, cb) {
   var plugins = Object.keys(this._plugins)
   var len = plugins.length
