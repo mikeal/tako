@@ -395,7 +395,7 @@ Application.prototype._decorate = function (req, resp) {
   // Get all the parsed url properties on the request
   // This is the same style express uses and it's quite nice
   var parsed = url.parse(req.url)
-  for (i in parsed) {
+  for (i in parsed) if (i !== 'auth') {
     req[i] = parsed[i]
   }
 
@@ -410,21 +410,6 @@ Application.prototype._decorate = function (req, resp) {
   if (!req.route) return
 
   req.params = req.route.params
-
-  var onWrites = []
-  resp._write = resp.write
-  resp.write = function () {
-    if (resp.statusCode === 404 && self._notfound) {
-      return self._notfound.request(req, resp)
-    }
-    if (onWrites.length === 0) return resp._write.apply(resp, arguments)
-    var args = arguments
-    onWrites.forEach(function (onWrite) {
-      var c = onWrite.apply(resp, args)
-      if (c !== undefined) args[0] = c
-    })
-    return resp._write.apply(resp, args)
-  }
 
   // Fix for node's premature header check in end()
   resp._end = resp.end
