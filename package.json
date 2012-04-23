@@ -12,7 +12,9 @@
 , "main" : "./index.html"
 , "dependencies": 
   { "filed":">= 0.0.6",
-    "routes":"*"
+    "routes":"*",
+    "cookies":"0.2",
+    "keygrip":"0.2"
   }
 , "devDependencies": { "request": "2.9.x" }
 , "scripts": { "test": "node tests/run.js" }

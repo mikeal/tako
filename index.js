@@ -16,6 +16,8 @@ var util = require('util')
   , handlebars = require('./handlebars')
   , rfc822 = require('./rfc822')
   , io = null
+  , Cookies = require('cookies')
+  , Keygrip = require('keygrip')
   ;
 
 try {
@@ -301,6 +303,10 @@ function Application (options) {
     self.logger = self.options.logger
   }
 
+  if (options.keys) {
+    self.keygrip = new Keygrip(options.keys)
+  }
+
   self._plugins = {}
 
   self.router = new routes.Router()
@@ -466,6 +472,8 @@ Application.prototype._decorate = function (req, resp) {
   for (i in self.addHeaders) {
     resp.setHeader(i, self.addHeaders[i])
   }
+
+  req.cookies = resp.cookies = new Cookies(req, resp, self.keygrip)
 
   req.accept = function () {
     if (!req.headers.accept) return '*/*'
