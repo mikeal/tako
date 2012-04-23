@@ -778,6 +778,13 @@ util.inherits(ServiceError, Error)
 ServiceError.prototype.name = 'ServiceError'
 module.exports.ServiceError = ServiceError
 
+
+
+
+
+// XXX Used by tako.router(), but other instances of
+// 'Router' are from routes.Router.  Can we get rid of
+// this somehow?
 function Router (hosts, options) {
   var self = this
   self.hosts = hosts || {}
