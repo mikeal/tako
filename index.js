@@ -267,98 +267,7 @@ function Application (options) {
     self.logger = self.options.logger
   }
 
-  self.onRequest = function (req, resp) {
-    if (self.logger.info) self.logger.info('Request', req.url, req.headers)
-    // Opt out entirely if this is a socketio request
-    if (self.socketio && req.url.slice(0, '/socket.io/'.length) === '/socket.io/') {
-      return self._ioEmitter.emit('request', req, resp)
-    }
 
-    for (i in self.addHeaders) {
-      resp.setHeader(i, self.addHeaders[i])
-    }
-
-    req.accept = function () {
-      if (!req.headers.accept) return '*/*'
-      var cc = null
-      var pos = 99999999
-      for (var i=arguments.length-1;i!==-1;i--) {
-        var ipos = req.headers.accept.indexOf(arguments[i])
-        if ( ipos !== -1 && ipos < pos ) cc = arguments[i]
-      }
-      return cc
-    }
-
-    resp.error = function (err) {
-      if (typeof(err) === "string") err = {message: err}
-      if (!err.statusCode) err.statusCode = 500
-      resp.statusCode = err.statusCode || 500
-      self.logger.log('error %statusCode "%message "', err)
-      resp.end(err.message || err) // this should be better
-    }
-
-    resp.notfound = function (log) {
-      if (log) self.logger.log(log)
-      self.notfound(req, resp)
-    }
-
-    // Get all the parsed url properties on the request
-    // This is the same style express uses and it's quite nice
-    var parsed = url.parse(req.url)
-    for (i in parsed) {
-      req[i] = parsed[i]
-    }
-
-    if (req.query) req.qs = qs.parse(req.query)
-
-    req.route = self.router.match(req.pathname)
-
-    if (!req.route) return self.notfound(req, resp)
-
-    req.params = req.route.params
-
-    var onWrites = []
-    resp._write = resp.write
-    resp.write = function () {
-      if (resp.statusCode === 404 && self._notfound) {
-        return self._notfound.request(req, resp)
-      }
-      if (onWrites.length === 0) return resp._write.apply(resp, arguments)
-      var args = arguments
-      onWrites.forEach(function (onWrite) {
-        var c = onWrite.apply(resp, args)
-        if (c !== undefined) args[0] = c
-      })
-      return resp._write.apply(resp, args)
-    }
-
-    // Fix for node's premature header check in end()
-    resp._end = resp.end
-    resp.end = function (chunk) {
-      if (resp.statusCode === 404 && self._notfound) {
-        return self._notfound.request(req, resp)
-      }
-      if (chunk) resp.write(chunk)
-      resp._end()
-      self.logger.info('Response', resp.statusCode, req.url, resp._headerSent)
-    }
-
-    self.emit('request', req, resp)
-
-
-    req.route.fn.call(req.route, req, resp, self.authHandler)
-
-    if (req.listeners('body').length) {
-      var buffer = ''
-      req.on('data', function (chunk) {
-        buffer += chunk
-      })
-      req.on('end', function (chunk) {
-        if (chunk) buffer += chunk
-        req.emit('body', buffer)
-      })
-    }
-  }
 
   self.router = new routes.Router()
   self.on('newroute', function (route) {
@@ -387,8 +296,8 @@ function Application (options) {
   self.httpServer = http.createServer()
   self.httpsServer = https.createServer(self.https)
 
-  self.httpServer.on('request', self.onRequest)
-  self.httpsServer.on('request', self.onRequest)
+  self.httpServer.on('request', self.onRequest.bind(self))
+  self.httpsServer.on('request', self.onRequest.bind(self))
 
   var _listenProxied = false
   var listenProxy = function () {
@@ -423,6 +332,100 @@ function Application (options) {
   }
 }
 util.inherits(Application, events.EventEmitter)
+
+Application.prototype.onRequest = function (req, resp) {
+  var self = this
+  if (self.logger.info) self.logger.info('Request', req.url, req.headers)
+  // Opt out entirely if this is a socketio request
+  if (self.socketio && req.url.slice(0, '/socket.io/'.length) === '/socket.io/') {
+    return self._ioEmitter.emit('request', req, resp)
+  }
+
+  for (i in self.addHeaders) {
+    resp.setHeader(i, self.addHeaders[i])
+  }
+
+  req.accept = function () {
+    if (!req.headers.accept) return '*/*'
+    var cc = null
+    var pos = 99999999
+    for (var i=arguments.length-1;i!==-1;i--) {
+      var ipos = req.headers.accept.indexOf(arguments[i])
+      if ( ipos !== -1 && ipos < pos ) cc = arguments[i]
+    }
+    return cc
+  }
+
+  resp.error = function (err) {
+    if (typeof(err) === "string") err = {message: err}
+    if (!err.statusCode) err.statusCode = 500
+    resp.statusCode = err.statusCode || 500
+    self.logger.log('error %statusCode "%message "', err)
+    resp.end(err.message || err) // this should be better
+  }
+
+  resp.notfound = function (log) {
+    if (log) self.logger.log(log)
+    self.notfound(req, resp)
+  }
+
+  // Get all the parsed url properties on the request
+  // This is the same style express uses and it's quite nice
+  var parsed = url.parse(req.url)
+  for (i in parsed) {
+    req[i] = parsed[i]
+  }
+
+  if (req.query) req.qs = qs.parse(req.query)
+
+  req.route = self.router.match(req.pathname)
+
+  if (!req.route) return self.notfound(req, resp)
+
+  req.params = req.route.params
+
+  var onWrites = []
+  resp._write = resp.write
+  resp.write = function () {
+    if (resp.statusCode === 404 && self._notfound) {
+      return self._notfound.request(req, resp)
+    }
+    if (onWrites.length === 0) return resp._write.apply(resp, arguments)
+    var args = arguments
+    onWrites.forEach(function (onWrite) {
+      var c = onWrite.apply(resp, args)
+      if (c !== undefined) args[0] = c
+    })
+    return resp._write.apply(resp, args)
+  }
+
+  // Fix for node's premature header check in end()
+  resp._end = resp.end
+  resp.end = function (chunk) {
+    if (resp.statusCode === 404 && self._notfound) {
+      return self._notfound.request(req, resp)
+    }
+    if (chunk) resp.write(chunk)
+    resp._end()
+    self.logger.info('Response', resp.statusCode, req.url, resp._headerSent)
+  }
+
+  self.emit('request', req, resp)
+
+
+  req.route.fn.call(req.route, req, resp, self.authHandler)
+
+  if (req.listeners('body').length) {
+    var buffer = ''
+    req.on('data', function (chunk) {
+      buffer += chunk
+    })
+    req.on('end', function (chunk) {
+      if (chunk) buffer += chunk
+      req.emit('body', buffer)
+    })
+  }
+}
 
 Application.prototype.addHeader = function (name, value) {
   this.addHeaders[name] = value
