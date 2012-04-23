@@ -296,8 +296,8 @@ function Application (options) {
   self.httpServer = http.createServer()
   self.httpsServer = https.createServer(self.https)
 
-  self.httpServer.on('request', self.onRequest.bind(self))
-  self.httpsServer.on('request', self.onRequest.bind(self))
+  self.httpServer.on('request', self._onRequest.bind(self))
+  self.httpsServer.on('request', self._onRequest.bind(self))
 
   var _listenProxied = false
   var listenProxy = function () {
@@ -333,13 +333,36 @@ function Application (options) {
 }
 util.inherits(Application, events.EventEmitter)
 
-Application.prototype.onRequest = function (req, resp) {
+Application.prototype._onRequest = function (req, resp) {
   var self = this
   if (self.logger.info) self.logger.info('Request', req.url, req.headers)
   // Opt out entirely if this is a socketio request
   if (self.socketio && req.url.slice(0, '/socket.io/'.length) === '/socket.io/') {
     return self._ioEmitter.emit('request', req, resp)
   }
+
+  self._decorate(req, resp)
+
+  if (!req.route) return self.notfound(req, resp)
+
+  self.emit('request', req, resp)
+
+  req.route.fn.call(req.route, req, resp, self.authHandler)
+
+  if (req.listeners('body').length) {
+    var buffer = ''
+    req.on('data', function (chunk) {
+      buffer += chunk
+    })
+    req.on('end', function (chunk) {
+      if (chunk) buffer += chunk
+      req.emit('body', buffer)
+    })
+  }
+}
+
+Application.prototype._decorate = function (req, resp) {
+  var self = this
 
   for (i in self.addHeaders) {
     resp.setHeader(i, self.addHeaders[i])
@@ -378,9 +401,13 @@ Application.prototype.onRequest = function (req, resp) {
 
   if (req.query) req.qs = qs.parse(req.query)
 
+  // warning: this is not a Route object!
+  // TODO: req.route should be a link to the actual Route object
+  // that the user has added musts and such to.  If it doesn't match
+  // any routes, then the default handler should just attach a
+  // 'resp.error(404)' handler to it.
   req.route = self.router.match(req.pathname)
-
-  if (!req.route) return self.notfound(req, resp)
+  if (!req.route) return
 
   req.params = req.route.params
 
@@ -409,23 +436,9 @@ Application.prototype.onRequest = function (req, resp) {
     resp._end()
     self.logger.info('Response', resp.statusCode, req.url, resp._headerSent)
   }
-
-  self.emit('request', req, resp)
-
-
-  req.route.fn.call(req.route, req, resp, self.authHandler)
-
-  if (req.listeners('body').length) {
-    var buffer = ''
-    req.on('data', function (chunk) {
-      buffer += chunk
-    })
-    req.on('end', function (chunk) {
-      if (chunk) buffer += chunk
-      req.emit('body', buffer)
-    })
-  }
 }
+
+
 
 Application.prototype.addHeader = function (name, value) {
   this.addHeaders[name] = value
@@ -447,7 +460,7 @@ Application.prototype.listen = function (createServer, port, cb) {
     port = createServer
   }
   self.server = createServer(function (req, resp) {
-    self.onRequest(req, resp)
+    self._onRequest(req, resp)
   })
   self.server.listen(port, cb)
   return this
