@@ -7,7 +7,7 @@ var tako = require('../index')
   , router = tako.router()
   , counter = 0
   ;
-  
+
 app1.route('/name').text('app1')
 app2.route('/name').text('app2')
 app3.route('/name').text('app3')
@@ -34,7 +34,7 @@ router.httpServer.listen(8080, function () {
     assert.equal(resp.body, 'app1')
     end()
   })
-  
+
   counter++
   request('http://localhost:8080/name', {headers:{host:'app2.localhost'}}, function (e, resp) {
     assert.ok(!e)
@@ -42,7 +42,7 @@ router.httpServer.listen(8080, function () {
     assert.equal(resp.body, 'app2')
     end()
   })
-  
+
   counter++
   request('http://localhost:8080/name', {headers:{host:'unknown.localhost'}}, function (e, resp) {
     assert.ok(!e)

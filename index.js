@@ -80,7 +80,7 @@ BufferResponse.prototype.request = function (req, resp) {
     resp.statusCode = 405
     return (resp._end ? resp._end : resp.end).call(resp)
   }
-  if (this.cache && 
+  if (this.cache &&
       req.headers['if-none-match'] === this.etag ||
       req.headers['if-modified-since'] === this.timestamp
       ) {
@@ -128,7 +128,7 @@ function Page (templatename) {
         }
       })
     }
-    
+
     if (templatename) {
       self.template(templatename)
     }
@@ -188,7 +188,7 @@ function Templates (app) {
 util.inherits(Templates, events.EventEmitter)
 Templates.prototype.get = function (name, cb) {
   var self = this
-  
+
   if (name.indexOf(' ') !== -1 || name[0] === '<') {
     process.nextTick(function () {
       if (!self.tempcache[name]) {
@@ -198,7 +198,7 @@ Templates.prototype.get = function (name, cb) {
     })
     return
   }
-  
+
   function finish () {
     if (name in self.names) {
       cb(null, self.files[self.names[name]])
@@ -227,7 +227,7 @@ Templates.prototype.directory = function (dir) {
     self.loaded = true
     if (self.loading === 0) self.emit('loaded')
   })
-} 
+}
 
 function loadfiles (f, cb) {
   var filesmap = {}
@@ -265,19 +265,19 @@ function Application (options) {
   self.addHeaders = {}
   if (self.options.logger) {
     self.logger = self.options.logger
-  } 
-  
+  }
+
   self.onRequest = function (req, resp) {
     if (self.logger.info) self.logger.info('Request', req.url, req.headers)
     // Opt out entirely if this is a socketio request
     if (self.socketio && req.url.slice(0, '/socket.io/'.length) === '/socket.io/') {
       return self._ioEmitter.emit('request', req, resp)
     }
-    
+
     for (i in self.addHeaders) {
       resp.setHeader(i, self.addHeaders[i])
     }
-    
+
     req.accept = function () {
       if (!req.headers.accept) return '*/*'
       var cc = null
@@ -296,7 +296,7 @@ function Application (options) {
       self.logger.log('error %statusCode "%message "', err)
       resp.end(err.message || err) // this should be better
     }
-    
+
     resp.notfound = function (log) {
       if (log) self.logger.log(log)
       self.notfound(req, resp)
@@ -308,7 +308,7 @@ function Application (options) {
     for (i in parsed) {
       req[i] = parsed[i]
     }
-    
+
     if (req.query) req.qs = qs.parse(req.query)
 
     req.route = self.router.match(req.pathname)
@@ -366,12 +366,12 @@ function Application (options) {
       route.handler(req, resp, authHandler)
     })
   })
-  
+
   self.templates = new Templates(self)
-  
+
   // Default to having json enabled
   self.on('request', JSONRequestHandler)
-  
+
   // setup servers
   self.http = options.http || {}
   self.https = options.https || {}
@@ -383,39 +383,39 @@ function Application (options) {
   } else if (options.socketio) {
     throw new Error('socket.io is not available');
   }
-  
+
   self.httpServer = http.createServer()
   self.httpsServer = https.createServer(self.https)
-  
+
   self.httpServer.on('request', self.onRequest)
   self.httpsServer.on('request', self.onRequest)
-  
+
   var _listenProxied = false
   var listenProxy = function () {
     if (!_listenProxied && self._ioEmitter) self._ioEmitter.emit('listening')
     _listenProxied = true
   }
-  
+
   self.httpServer.on('listening', listenProxy)
   self.httpsServer.on('listening', listenProxy)
-  
+
   if (io && self.socketio) {
     // setup socket.io
     self._ioEmitter = new events.EventEmitter()
-    
+
     self.httpServer.on('upgrade', function (request, socket, head) {
       self._ioEmitter.emit('upgrade', request, socket, head)
     })
     self.httpsServer.on('upgrade', function (request, socket, head) {
       self._ioEmitter.emit('upgrade', request, socket, head)
     })
-    
+
     self.socketioManager = new io.Manager(self._ioEmitter, self.socketio)
     self.sockets = self.socketioManager.sockets
   }
-  
+
   if (!self.logger) {
-    self.logger = 
+    self.logger =
       { log: console.log
       , error: console.error
       , info: function () {}
@@ -495,11 +495,11 @@ Application.prototype.notfound = function (req, resp) {
     this._notfound = req
     return
   }
-  
+
   if (resp._header) return // This response already started
-  
+
   if (this._notfound) return this._notfound.request(req, resp)
-  
+
   var cc = req.accept('text/html', 'application/json', 'text/plain', '*/*') || 'text/plain'
   if (cc === '*/*') cc = 'text/plain'
   resp.statusCode = 404
@@ -513,16 +513,19 @@ Application.prototype.notfound = function (req, resp) {
   }
   resp.end(body)
 }
+
 Application.prototype.auth = function (handler) {
   if (!handler) return this.authHandler
   this.authHandler = handler
 }
+
 Application.prototype.page = function () {
   var page = new Page()
     , self = this
     ;
   page.application = self
-  page.template = function (name) {    
+
+  page.template = function (name) {
     var p = page.promise("template")
     self.templates.get(name, function (e, template) {
       if (e) return p(e)
@@ -626,7 +629,7 @@ function Route (path, application) {
       resp.end('Method not Allowed.')
       return
     }
-    
+
     self.emit('before', req, resp)
     if (self.authHandler) {
       authHandler = self.authHandler
@@ -686,13 +689,13 @@ function Route (path, application) {
         }
         run()
       }
-
     } else {
       returnEarly(req, resp, keys, authHandler)
     }
   }
   application.emit('newroute', self)
 }
+
 util.inherits(Route, events.EventEmitter)
 Route.prototype.json = function (cb) {
   if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'application/json')
@@ -704,6 +707,7 @@ Route.prototype.json = function (cb) {
   this.byContentType['application/json'] = cb
   return this
 }
+
 Route.prototype.html = function (cb) {
   if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'text/html')
   else if (typeof cb === 'string') {
@@ -713,6 +717,7 @@ Route.prototype.html = function (cb) {
   this.byContentType['text/html'] = cb
   return this
 }
+
 Route.prototype.text = function (cb) {
   if (Buffer.isBuffer(cb)) cb = new BufferResponse(cb, 'text/plain')
   else if (typeof cb === 'string') {
@@ -723,6 +728,7 @@ Route.prototype.text = function (cb) {
   return this
 }
 
+
 Route.prototype.file = function (filepath) {
   this.on('request', function (req, resp) {
     var f = filed(filepath)
@@ -731,6 +737,7 @@ Route.prototype.file = function (filepath) {
   })
   return this
 }
+
 Route.prototype.files = function (filepath) {
   this.on('request', function (req, resp) {
     req.route.splats.unshift(filepath)
@@ -745,19 +752,23 @@ Route.prototype.files = function (filepath) {
   })
   return this
 }
+
 Route.prototype.auth = function (handler) {
   if (!handler) return this.authHandler
   this.authHandler = handler
   return this
 }
+
 Route.prototype.must = function () {
   this._must = Array.prototype.slice.call(arguments)
   return this
 }
+
 Route.prototype.methods = function () {
   this._methods = Array.prototype.slice.call(arguments)
   return this
 }
+
 
 function ServiceError(msg) {
   Error.apply(this, arguments)
@@ -773,7 +784,7 @@ function Router (hosts, options) {
   var self = this
   self.hosts = hosts || {}
   self.options = options || {}
-  
+
   function makeHandler (type) {
     var handler = function (req, resp) {
       var host = req.headers.host
@@ -790,22 +801,25 @@ function Router (hosts, options) {
     }
     return handler
   }
-  
+
   self.httpServer = http.createServer()
   self.httpsServer = https.createServer(self.options.ssl || {})
-  
+
   self.httpServer.on('request', makeHandler('request'))
   self.httpsServer.on('request', makeHandler('request'))
-  
+
   self.httpServer.on('upgrade', makeHandler('upgrade'))
   self.httpsServer.on('upgrade', makeHandler('upgrade'))
 }
+
 Router.prototype.host = function (host, app) {
   this.hosts[host] = app
 }
+
 Router.prototype.default = function (app) {
   this._default = app
 }
+
 Router.prototype.close = function (cb) {
   var counter = 1
     , self = this
@@ -824,13 +838,13 @@ Router.prototype.close = function (cb) {
     self.httpsServer.once('close', end)
     self.httpsServer.close()
   }
-  
+
   for (i in self.hosts) {
     counter++
     process.nextTick(function () {
       self.hosts[i].close(end)
     })
-    
+
   }
   end()
 }
