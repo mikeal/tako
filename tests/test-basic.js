@@ -13,7 +13,7 @@ t
     .html(function (req, resp) {
       resp.end('<html><body>Hello World</body></html>')
     })
-    .on('request', function (req, resp) {
+    .default(function (req, resp) {
       resp.statusCode = 200
       resp.setHeader('content-type', 'text/plain')
       resp.end('hello')
@@ -58,6 +58,7 @@ t.httpServer.listen(8000, function () {
   request({url:url,headers:{'accept':'application/json'}}, function (e, resp, body) {
     if (e) throw e
     if (resp.statusCode !== 200) throw new Error('status code is not 200. '+resp.statusCode)
+    console.error(resp.headers, body)
     assert.equal(resp.headers['content-type'], 'application/json')
     assert.equal(body, JSON.stringify({text:'hello world'}))
     console.log('Passed json /')
@@ -105,6 +106,7 @@ t.httpServer.listen(8000, function () {
 
   counter++
   request({url:url+'static',headers:{'accept':'text/html'}}, function (e, resp, body) {
+    console.log('... html /static', resp.headers, body)
     if (e) throw e
     if (resp.statusCode !== 200) throw new Error('status code is not 200. '+resp.statusCode)
     assert.equal(resp.headers['content-type'], 'text/html')
