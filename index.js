@@ -569,7 +569,11 @@ function JSONRequestHandler (req, resp) {
   if (req.method === "PUT" || req.method === "POST") {
     if (req.headers['content-type'] === 'application/json') {
       req.on('body', function (body) {
-        req.emit('json', JSON.parse(body))
+        try {
+          req.emit('json', JSON.parse(body));
+        } catch (e) {
+          req.emit('error', e);
+        }
       })
     }
   }
