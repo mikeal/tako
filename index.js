@@ -567,9 +567,13 @@ function JSONRequestHandler (req, resp) {
     return orig.call(resp, chunk)
   }
   if (req.method === "PUT" || req.method === "POST") {
-    if (req.headers['content-type'] === 'application/json') {
+    if (req.headers['content-type'].split(';')[0] === 'application/json') {
       req.on('body', function (body) {
-        req.emit('json', JSON.parse(body))
+        try {
+          req.emit('json', JSON.parse(body));
+        } catch (e) {
+          req.emit('error', e);
+        }
       })
     }
   }
@@ -637,7 +641,7 @@ function Route (path, application) {
       if (req.method !== 'PUT' && req.method !== 'POST') {
         var cc = req.accept.apply(req, keys)
       } else {
-        var cc = req.headers['content-type']
+        var cc = req.headers['content-type'].split(';')[0];
       }
 
       if (!cc) return returnEarly(req, resp, keys, authHandler)
