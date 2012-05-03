@@ -83,3 +83,21 @@ router.default(default)
 router.httpServer.listen(80)
 router.httpsServer.listen(443)
 ```
+
+### Templating
+
+Templating with http://handlebarsjs.com/
+
+```javascript
+var tako = require('../index')
+  , app = tako()
+  , templates = app.templates
+  ;
+
+templates.directory(__dirname + '/templates')
+
+templates.get('template.html', function(err, t){
+  if(err) throw new Error(err)
+  var html = t.render({data: 'hello world'})
+})
+```
