@@ -11,8 +11,8 @@
   { "url" : "http://github.com/mikeal/tako/issues" }
 , "main" : "./index.html"
 , "dependencies": 
-  { "filed":">= 0.0.6",
-    "routes":"*"
+  { "filed":">= 0.0.6"
+    , "Maple":"*"
   }
 , "devDependencies": { "request": "2.9.x" }
 , "scripts": { "test": "node tests/run.js" }
