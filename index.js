@@ -10,7 +10,7 @@ var util = require('util')
   , http = require('http')
   , https = require('https')
   // Dependencies
-  , routes = require('routes')
+  , mapleTree = require('mapleTree')
   , filed = require('filed')
   // Local Imports
   , handlebars = require('./handlebars')
@@ -60,7 +60,6 @@ var cap = function (stream, limit) {
 module.exports = function (options) {
   return new Application(options)
 }
-exports.globalMiddles = {}
 
 function BufferResponse (buffer, mimetype) {
   if (!Buffer.isBuffer(buffer)) this.body = new Buffer(buffer)
@@ -263,7 +262,6 @@ function Application (options) {
   var self = this
   if (!options) options = {}
   self.options = options
-  self.middles = []
   self.addHeaders = {}
   if (self.options.logger) {
     self.logger = self.options.logger
@@ -315,7 +313,7 @@ function Application (options) {
 
     req.route = self.router.match(req.pathname)
 
-    if (!req.route) return self.notfound(req, resp)
+    if (!req.route || !req.route.perfect) return self.notfound(req, resp)
 
     req.params = req.route.params
 
@@ -347,13 +345,8 @@ function Application (options) {
 
     self.emit('request', req, resp)
 
-    self.middles.forEach(function (middle) {
-      middle.emit('request', req, resp)
-      if (resp.onWrite) {
-        onWrites.push(resp.onWrite)
-        resp.onWrite = null
-      }
-    })
+
+    req.route.fn.call(req.route, req, resp, self.authHandler)
 
     if (req.listeners('body').length) {
       var buffer = ''
@@ -365,21 +358,19 @@ function Application (options) {
         req.emit('body', buffer)
       })
     }
-
-    req.route.fn.call(req.route, req, resp, self.authHandler)
   }
 
-  self.router = new routes.Router()
+  self.router = new mapleTree.RouteTree()
   self.on('newroute', function (route) {
-    self.router.addRoute(route.path, function (req, resp, authHandler) {
+    self.router.define(route.path, function (req, resp, authHandler){
       route.handler(req, resp, authHandler)
-    })
+    }) 
   })
   
   self.templates = new Templates(self)
   
   // Default to having json enabled
-  self.middle('json')
+  self.on('request', JSONRequestHandler)
   
   // setup servers
   self.http = options.http || {}
@@ -443,12 +434,7 @@ Application.prototype.route = function (path, cb) {
   return r
 }
 Application.prototype.middle = function (mid) {
-  if (typeof mid === 'string') {
-    if (!exports.globalMiddles[mid]) throw new Error('No known global middleware of type "'+mid+'"')
-    mid = exports.globalMiddles[mid]
-  }
-  this.middles.push(mid)
-  return this
+  throw new Error('Middleware is dumb. Just listen to the app "request" event.')
 }
 
 Application.prototype.listen = function (createServer, port, cb) {
@@ -562,36 +548,37 @@ Application.prototype.page = function () {
   return page
 }
 
-function JSONMiddleware () {
-  this.on('request', function (req, resp) {
-    resp.onWrite = function (chunk) {
-      if (resp._header) return chunk // This response already started
-      // bail fast for chunks to limit impact on streaming
-      if (Buffer.isBuffer(chunk)) return chunk
-      // if it's an object serialize it and set proper headers
-      if (typeof chunk === 'object') {
-        chunk = new Buffer(JSON.stringify(chunk))
-        resp.setHeader('content-type', 'application/json')
-        resp.setHeader('content-length', chunk.length)
-        if (!resp.statusCode && (req.method === 'GET' || req.method === 'HEAD')) {
-          resp.statusCode = 200
+module.exports.JSONRequestHandler = JSONRequestHandler
+function JSONRequestHandler (req, resp) {
+  var orig = resp.write
+  resp.write = function (chunk) {
+    if (resp._header) return orig.call(this, chunk) // This response already started
+    // bail fast for chunks to limit impact on streaming
+    if (Buffer.isBuffer(chunk)) return orig.call(this, chunk)
+    // if it's an object serialize it and set proper headers
+    if (typeof chunk === 'object') {
+      chunk = new Buffer(JSON.stringify(chunk))
+      resp.setHeader('content-type', 'application/json')
+      resp.setHeader('content-length', chunk.length)
+      if (!resp.statusCode && (req.method === 'GET' || req.method === 'HEAD')) {
+        resp.statusCode = 200
+      }
+    }
+    return orig.call(resp, chunk)
+  }
+  if (req.method === "PUT" || req.method === "POST") {
+    if (req.headers['content-type'].split(';')[0] === 'application/json') {
+      req.on('body', function (body) {
+        try {
+          req.emit('json', JSON.parse(body));
+        } catch (e) {
+          req.emit('error', e);
         }
-        return chunk
-      }
-      return chunk
+      })
     }
-    
-    if (req.method === "PUT" || req.method === "POST") {
-      if (req.headers['content-type'] === 'application/json') {
-        req.on('body', function (body) {
-          req.emit('json', JSON.parse(body))
-        })
-      }
-    }
-  })
+  }
 }
-util.inherits(JSONMiddleware, events.EventEmitter)
-exports.globalMiddles['json'] = new JSONMiddleware()
+
 
 function Route (path, application) {
   // This code got really crazy really fast.
@@ -654,7 +641,7 @@ function Route (path, application) {
       if (req.method !== 'PUT' && req.method !== 'POST') {
         var cc = req.accept.apply(req, keys)
       } else {
-        var cc = req.headers['content-type']
+        var cc = req.headers['content-type'].split(';')[0];
       }
 
       if (!cc) return returnEarly(req, resp, keys, authHandler)
@@ -750,8 +737,8 @@ Route.prototype.file = function (filepath) {
 }
 Route.prototype.files = function (filepath) {
   this.on('request', function (req, resp) {
-    req.route.splats.unshift(filepath)
-    var p = path.join.apply(path.join, req.route.splats)
+    req.route.extras.unshift(filepath)
+    var p = path.join.apply(path.join, req.route.extras)
     if (p.slice(0, filepath.length) !== filepath) {
       resp.statusCode = 403
       return resp.end('Naughty Naughty!')
