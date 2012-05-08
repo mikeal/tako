@@ -10,7 +10,7 @@ var util = require('util')
   , http = require('http')
   , https = require('https')
   // Dependencies
-  , Maple = require('Maple')
+  , mapleTree = require('mapleTree')
   , filed = require('filed')
   // Local Imports
   , handlebars = require('./handlebars')
@@ -360,7 +360,7 @@ function Application (options) {
     }
   }
 
-  self.router = new Maple()
+  self.router = new mapleTree.RouteTree()
   self.on('newroute', function (route) {
     self.router.define(route.path, function (req, resp, authHandler){
       route.handler(req, resp, authHandler)

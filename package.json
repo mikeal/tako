@@ -12,7 +12,7 @@
 , "main" : "./index.html"
 , "dependencies": 
   { "filed":">= 0.0.6"
-    , "Maple":"*"
+    , "mapleTree":"*"
   }
 , "devDependencies": { "request": "2.9.x" }
 , "scripts": { "test": "node tests/run.js" }
