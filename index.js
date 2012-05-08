@@ -10,7 +10,7 @@ var util = require('util')
   , http = require('http')
   , https = require('https')
   // Dependencies
-  , routes = require('routes')
+  , mapleTree = require('mapleTree')
   , filed = require('filed')
   // Local Imports
   , handlebars = require('./handlebars')
@@ -313,7 +313,7 @@ function Application (options) {
 
     req.route = self.router.match(req.pathname)
 
-    if (!req.route) return self.notfound(req, resp)
+    if (!req.route || !req.route.perfect) return self.notfound(req, resp)
 
     req.params = req.route.params
 
@@ -360,11 +360,11 @@ function Application (options) {
     }
   }
 
-  self.router = new routes.Router()
+  self.router = new mapleTree.RouteTree()
   self.on('newroute', function (route) {
-    self.router.addRoute(route.path, function (req, resp, authHandler) {
+    self.router.define(route.path, function (req, resp, authHandler){
       route.handler(req, resp, authHandler)
-    })
+    }) 
   })
   
   self.templates = new Templates(self)
@@ -737,8 +737,8 @@ Route.prototype.file = function (filepath) {
 }
 Route.prototype.files = function (filepath) {
   this.on('request', function (req, resp) {
-    req.route.splats.unshift(filepath)
-    var p = path.join.apply(path.join, req.route.splats)
+    req.route.extras.unshift(filepath)
+    var p = path.join.apply(path.join, req.route.extras)
     if (p.slice(0, filepath.length) !== filepath) {
       resp.statusCode = 403
       return resp.end('Naughty Naughty!')
