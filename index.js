@@ -124,7 +124,7 @@ function Page (templatename) {
           })
         } else {
           self.application.logger.error('Page::Uncaught Error:')
-          self.application.logger.error(e)
+          self.application.logger.error(err)
         }
       })
     }
