@@ -83,15 +83,18 @@ router.httpsServer.listen(443)
 Templating with http://handlebarsjs.com/
 
 ```javascript
-var tako = require('../index')
+var tako = require('tako')
+  , path = require('path')
   , app = tako()
   , templates = app.templates
   ;
 
-templates.directory(__dirname + '/templates')
+templates.directory(path.join(__dirname, 'templates'))
 
-templates.get('template.html', function(err, t){
-  if(err) throw new Error(err)
-  var html = t.render({data: 'hello world'})
+app.route('/').html(function(req, res) {
+  templates.get('index.html', function(err, t) {
+    if (err) throw new Error(err)
+    res.end(t.render({ foo: 'bar' }))
+  })
 })
 ```
