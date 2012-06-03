@@ -219,6 +219,7 @@ Templates.prototype.directory = function (dir) {
   loadfiles(dir, function (e, filemap) {
     if (e) return self.emit('error', e)
     for (i in filemap) {
+      if (path.basename(i).charAt(0) === '.') continue
       self.files[i] = new self.Template(filemap[i])
       self.names[path.basename(i)] = i
       self.names[path.basename(i, path.extname(i))] = i
