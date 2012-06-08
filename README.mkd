@@ -32,7 +32,7 @@ var tako = require('tako')
 app.route('/static/*').files(path.join(__dirname, 'static'))
 
 app.route('/proxypass', function (req, resp) {
-  req.pipe(request("http://otherserver.com"+req.url)).pipe(resp)
+  req.pipe(request("http://otherserver.com"+req.url).pipe(resp))
 })
 
 app.route('/hello.json').json({msg:'hello!'})
