@@ -218,7 +218,7 @@ Templates.prototype.directory = function (dir) {
   this.loading += 1
   loadfiles(dir, function (e, filemap) {
     if (e) return self.emit('error', e)
-    for (i in filemap) {
+    for (var i in filemap) {
       if (path.basename(i).charAt(0) === '.') continue
       self.files[i] = new self.Template(filemap[i])
       self.names[path.basename(i)] = i
@@ -241,7 +241,7 @@ function loadfiles (f, cb) {
         if (stat.isDirectory()) {
           loadfiles(path.join(f, filename), function (e, files) {
             if (e) return cb(e)
-            for (i in files) {
+            for (var i in files) {
               filesmap[i] = files[i]
             }
             counter -= 1
@@ -275,8 +275,8 @@ function Application (options) {
       return self._ioEmitter.emit('request', req, resp)
     }
     
-    for (i in self.addHeaders) {
-      resp.setHeader(i, self.addHeaders[i])
+    for (var hdr in self.addHeaders) {
+      resp.setHeader(hdr, self.addHeaders[hdr])
     }
     
     req.accept = function () {
@@ -306,7 +306,7 @@ function Application (options) {
     // Get all the parsed url properties on the request
     // This is the same style express uses and it's quite nice
     var parsed = url.parse(req.url)
-    for (i in parsed) {
+    for (var i in parsed) {
       req[i] = parsed[i]
     }
     
@@ -830,7 +830,7 @@ Router.prototype.close = function (cb) {
     self.httpsServer.close()
   }
   
-  for (i in self.hosts) {
+  for (var i in self.hosts) {
     counter++
     process.nextTick(function () {
       self.hosts[i].close(end)
