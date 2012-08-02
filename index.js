@@ -502,6 +502,7 @@ Application.prototype.notfound = function (req, resp) {
   if (this._notfound) return this._notfound.request(req, resp)
   
   var cc = req.accept('text/html', 'application/json', 'text/plain', '*/*') || 'text/plain'
+  var body = 'Not Found'
   if (cc === '*/*') cc = 'text/plain'
   resp.statusCode = 404
   resp.setHeader('content-type', cc)
@@ -509,8 +510,6 @@ Application.prototype.notfound = function (req, resp) {
     body = '<html><body>Not Found</body></html>'
   } else if (cc === 'application/json') {
     body = JSON.stringify({status:404, reason:'not found', message:'not found'})
-  } else {
-    body = 'Not Found'
   }
   resp.end(body)
 }
