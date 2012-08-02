@@ -641,7 +641,10 @@ function Route (path, application) {
       if (req.method !== 'PUT' && req.method !== 'POST') {
         var cc = req.accept.apply(req, keys)
       } else {
-        var cc = req.headers['content-type'].split(';')[0];
+        if(req.headers['content-type'])
+          var cc = req.headers['content-type'].split(';')[0];
+        else
+          var cc = false;
       }
 
       if (!cc) return returnEarly(req, resp, keys, authHandler)
