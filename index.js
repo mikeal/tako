@@ -738,17 +738,20 @@ Route.prototype.file = function (filepath) {
   })
   return this
 }
+Route.prototype.serveFiles = function (filepath, req, resp) {
+  req.route.extras.unshift(filepath)
+  var p = path.join.apply(path.join, req.route.extras)
+  if (p.slice(0, filepath.length) !== filepath) {
+    resp.statusCode = 403
+    return resp.end('Naughty Naughty!')
+  }
+  var f = filed(p)
+  req.pipe(f)
+  f.pipe(resp)
+}
 Route.prototype.files = function (filepath) {
   this.on('request', function (req, resp) {
-    req.route.extras.unshift(filepath)
-    var p = path.join.apply(path.join, req.route.extras)
-    if (p.slice(0, filepath.length) !== filepath) {
-      resp.statusCode = 403
-      return resp.end('Naughty Naughty!')
-    }
-    var f = filed(p)
-    req.pipe(f)
-    f.pipe(resp)
+    this.serveFiles(filepath, req, resp);
   })
   return this
 }
