@@ -60,6 +60,7 @@ var cap = function (stream, limit) {
 module.exports = function (options) {
   return new Application(options)
 }
+module.exports.handlebars = handlebars
 
 function BufferResponse (buffer, mimetype) {
   if (!Buffer.isBuffer(buffer)) this.body = new Buffer(buffer)
